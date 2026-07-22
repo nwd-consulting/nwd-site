@@ -1,0 +1,88 @@
+{
+  "_comment": "EDIT THIS FILE TO UPDATE THE TEAM PAGE. One object per person. The /about page renders one card per entry automatically — no code changes needed. `bio` (optional) generates a full profile page at /people/<slug>.html. Group order on the page follows `groupOrder` below.",
+  "groupOrder": [
+    "Founders",
+    "Security, Engineering, Software & AI",
+    "Research, Academics & AI for Education"
+  ],
+  "people": [
+    {
+      "slug": "sarah-maestrales",
+      "name": "Sarah Maestrales, Ph.D.",
+      "group": "Founders",
+      "title": "AI Implementation Strategist | Psychometrician | Research Methodologist | Curriculum Consultant | Adventurer | Artist"
+    },
+    {
+      "slug": "ifeyinwa-onyenekwu",
+      "name": "Ifeyinwa Onyenekwu, Ph.D., LMSW",
+      "group": "Founders",
+      "title": "Learning Leader | Researcher | Professor"
+    },
+    {
+      "slug": "travis-wichert",
+      "name": "Travis Wichert",
+      "group": "Security, Engineering, Software & AI",
+      "title": "IT Generalist | Systems Engineer | Networking | DevOps | Project Management"
+    },
+    {
+      "slug": "zak-hickman",
+      "name": "Zak Hickman",
+      "group": "Security, Engineering, Software & AI",
+      "title": "AppSec Engineer | Vulnerability Management"
+    },
+    {
+      "slug": "jake-mirra",
+      "name": "Jake Mirra, Ph.D.",
+      "group": "Security, Engineering, Software & AI",
+      "title": "Software Engineer specializing in financial systems",
+      "bio": "Jake is a mathematician and software engineer. He earned a Ph.D. in mathematics from the University of Pittsburgh, where he held a research fellowship as a graduate student for two years. He studied the structure of subriemannian manifolds, among the most flexibly applicable yet underappreciated objects in modern geometry. Jake defended his thesis “Hölder Continuous Mappings into Subriemannian Manifolds” in 2018. Since then Jake has applied his knowledge of mathematics and algorithms to Human Resources (Indeed, 2019), Accounting (Ender Property Management, which Jake cofounded, 2019–2024), Education Technology (Trilogy, 2024–2025), and Energy (Base Power, 2026). Having observed a world that is becoming decreasingly mathematically literate at a time when we need the opposite, Jake is aiming to make a significant impact on how humans, including his own children, learn mathematics."
+    },
+    {
+      "slug": "sadie-gunnink",
+      "name": "Sadie Gunnink, Ed.D.",
+      "group": "Research, Academics & AI for Education",
+      "title": "CEO & Founder of Rise Evolved | Learning Systems Development | EdTech Specialist",
+      "bio": "Dr. Gunnink is the CEO and Founder of Rise Evolved. She has an Ed.D. in Education specializing in the integration of learning technologies. She designs the learning materials, systems, and environments people need to perform at their best."
+    },
+    {
+      "slug": "kari-beth-krieger",
+      "name": "Kari Beth Krieger, Ph.D.",
+      "group": "Research, Academics & AI for Education",
+      "title": "Equine Facilitated Personal Coach | Catalyst for Growth and Transformation | Cross-cultural Bridge | Problem Solver",
+      "bio": "Dr. Krieger is the CEO and Founder of Intermission, Inc., a center for Equine Facilitated Healing. She has a Ph.D. in Genetics from Iowa State University. Previously, Dr. Krieger served as a Senior Quality Supervisor at Boston Scientific. She also has almost 20 years of experience as an editor, including academic publication and the development of educational materials for Advanced Placement STEM courses."
+    },
+    {
+      "slug": "antonio-triunfo",
+      "name": "Antonio Triunfo, M.A.T.",
+      "group": "Research, Academics & AI for Education",
+      "title": "Educational Consultant | Broad Subject Tutor | Curriculum Editor | Motivational Designer | Data Analyst | Writer",
+      "bio": "A passionate educator and resourceful innovator, Antonio leverages education, data, technology, and human connection to transform complex challenges into practical solutions. His approach centers on making sophisticated ideas approachable, ensuring that knowledge remains relevant, tangible, and usable in real-world contexts. As founder of Triumphant, Antonio integrates expertise across education, analysis, and innovation to help individuals and organizations navigate challenges with clarity and confidence."
+    },
+    {
+      "slug": "davi-deconti",
+      "name": "Davi DeConti, Ph.D.",
+      "group": "Research, Academics & AI for Education",
+      "title": "Instructional Design | Corporate Training"
+    },
+    {
+      "slug": "henno-kotze",
+      "name": "Henno Kotze",
+      "group": "Research, Academics & AI for Education",
+      "title": "Digital Futures Manager | Preparing Organisations for the Future of Learning | AI Strategist",
+      "bio": "Henno is a learning innovator, transforming education through AI-amplified systems and products. He oversees enterprise-scale digital transformation and AI innovation at Brisbane Catholic Education, shaping governance and strategic adoption across a diocese of 146 schools. Leading cross-functional teams, he designs and implements AI systems to accelerate learning, empower educators, and future-proof education. He has advised and partnered with leading organisations, including the Australian Government’s Department of Education, Skills and Employment (DESE), the Department of Foreign Affairs and Trade (DFAT), Cambridge University Press, and the International Society for Technology in Education, to shape digital transformation strategies and scalable learning solutions. At the University of Queensland, he spearheaded the IELTSx MOOC on edX—now with 1.2 million users and ranked 8th most popular online course of all time. He led digital curriculum transformation, orchestrated the transition of 100+ teachers to online learning during COVID-19, and as founder of the English Australia Ed-Tech Special Interest Group, he mobilised large-scale communities of practice advancing the future of learning in Australia and abroad."
+    },
+    {
+      "slug": "gordon-tai",
+      "name": "Gordon Tai",
+      "group": "Research, Academics & AI for Education",
+      "title": "Global Partner | AI Enablement Specialist | STEM & Language Edupreneur",
+      "bio": "Gordon’s work spans three key pillars: international trade, technology, and education. In trade, he focuses on agri-commodities and energy, covering CIF sugar (ICUMSA) and CIF or TTT EN590 fuel; via CapFiX he connects trusted suppliers and buyers and facilitates structured, verifiable trade flows built on transparency and long-term value. In technology, Gordon leads AI enablement and transformation projects, integrating ERP systems and AI-driven workflows that streamline operations, enhance hiring, and drive scalability. In education, Gordon helps local and international students—particularly from China and EMEA regions—access English programs and university pathways in Malaysia, bridging global education with real-world opportunity through 3E English."
+    },
+    {
+      "slug": "sarah-heany",
+      "name": "Sarah Heany, Ph.D.",
+      "group": "Research, Academics & AI for Education",
+      "title": "Behavioural and Clinical Neuroscience | Data Science | Interdisciplinary Research Methodology | Mellon Scholar | Oppenheimer Fellow"
+    }
+  ]
+}
