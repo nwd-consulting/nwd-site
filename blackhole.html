@@ -143,6 +143,34 @@ vec3 bbody(float t){
   return c;
 }
 
+// Bright clumps that orbit at the local Keplerian rate and are elongated along
+// the velocity direction (with a trailing tail) — this is what makes the flow
+// read as *moving*. Evaluated in the disk plane (P.xz), so lensing carries the
+// streaks over the top of the shadow too.
+float flowStreaks(vec3 P){
+  vec2 pos = vec2(P.x, P.z);
+  float acc = 0.0;
+  for(int k=0;k<14;k++){
+    float fk = float(k);
+    float seed = fract(sin(fk*12.9898)*43758.5453);
+    float seed2 = fract(sin(fk*78.233)*21414.53);
+    float rk = RIN + 0.5 + seed*(ROUT - RIN - 1.4);
+    float omk = 1.1/pow(rk, 1.5);                     // Ω ∝ r^-3/2 (Keplerian)
+    float ph = fk*2.3999 + seed2*6.2831 + omk*uTime*3.2;  // advected orbital phase
+    vec2 c  = vec2(cos(ph), sin(ph))*rk;              // clump center on its orbit
+    vec2 rel = pos - c;
+    vec2 rh = c/rk;                                   // radial unit
+    vec2 tv = vec2(-rh.y, rh.x);                      // tangential = velocity direction
+    float xr = dot(rel, rh), xt = dot(rel, tv);
+    // thin radially, long along velocity → a streak
+    float g = exp(-(xr*xr)/0.09 - (xt*xt)/2.4);
+    // trailing tail behind the direction of motion
+    g += 0.55*exp(-(xr*xr)/0.05 - (xt+1.4)*(xt+1.4)/5.0);
+    acc += g*(0.55 + 0.45*seed2);
+  }
+  return acc;
+}
+
 // Emissive contribution of the accretion disk at equatorial crossing point P.
 // photon travels along pd (unit). Includes Doppler beaming + gravitational redshift.
 vec3 diskEmission(vec3 P, vec3 pd){
@@ -170,12 +198,15 @@ vec3 diskEmission(vec3 P, vec3 pd){
   float th = omega*uTime;
   vec2 q = vec2(P.x*cos(th) - P.z*sin(th), P.x*sin(th) + P.z*cos(th));
   float turb = fbm(q*0.6) + 0.5*fbm(q*1.6 + 11.0);   // 2 octaves, smoothly interpolated
-  turb = 0.45 + 0.85*turb;                            // keep it soft, never fully dark
-  // gentle radial softening (a cheap blur across the flow bands)
-  turb *= 0.85 + 0.15*fbm(vec2(r*0.8 - uTime*0.1, 3.0));
+  turb = 0.4 + 0.6*turb;                              // soft base cloud
+
+  // moving particulate: bright clumps orbiting along the velocity field
+  float hot = flowStreaks(P);
+  float flow = turb*0.7 + hot*1.5;
 
   vec3 col = bbody(tnorm * shift);
-  return col * bright * turb * edge * 0.9;
+  col = mix(col, vec3(1.0,0.95,0.88), clamp(hot*0.45, 0.0, 0.6)); // hot cores brighten toward white
+  return col * bright * flow * edge * 0.9;
 }
 
 // Ray vs oriented box (the cube). ro,rd in world space; returns nearest hit in [0,maxT].
