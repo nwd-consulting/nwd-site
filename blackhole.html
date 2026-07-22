@@ -120,6 +120,20 @@ vec3 stars(vec3 dir){
   return col;
 }
 
+// --- smooth value noise / fbm (replaces blocky hash cells in the disk) ---
+float vhash(vec2 p){ p = fract(p*vec2(123.34,345.45)); p += dot(p, p+34.345); return fract(p.x*p.y); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 uu = f*f*(3.0-2.0*f);
+  float a = vhash(i), b = vhash(i+vec2(1,0)), c = vhash(i+vec2(0,1)), d = vhash(i+vec2(1,1));
+  return mix(mix(a,b,uu.x), mix(c,d,uu.x), uu.y);
+}
+float fbm(vec2 p){
+  float v = 0.0, amp = 0.5;
+  for(int i=0;i<4;i++){ v += amp*vnoise(p); p *= 2.03; amp *= 0.5; }
+  return v;
+}
+
 // simple cool->hot color ramp (approx blackbody)
 vec3 bbody(float t){
   t = clamp(t,0.0,1.0);
@@ -150,10 +164,15 @@ vec3 diskEmission(vec3 P, vec3 pd){
 
   bright *= pow(doppler, 3.0) * grav;                     // relativistic beaming + grav dimming
 
-  // turbulent banding
-  float ang = atan(P.z, P.x);
-  float turb = 0.55 + 0.45*sin(ang*7.0 + r*2.2 - uTime*1.4
-                + 9.0*hash(vec3(floor(r*2.5), floor(ang*3.0), 0.0)));
+  // Smooth flow: sample noise in a *co-rotating* frame so the pattern shears
+  // with the disk's differential (Keplerian) rotation — no rectangular cells.
+  float omega = 1.2/pow(r, 1.5);              // Ω ∝ r^-3/2
+  float th = omega*uTime;
+  vec2 q = vec2(P.x*cos(th) - P.z*sin(th), P.x*sin(th) + P.z*cos(th));
+  float turb = fbm(q*0.6) + 0.5*fbm(q*1.6 + 11.0);   // 2 octaves, smoothly interpolated
+  turb = 0.45 + 0.85*turb;                            // keep it soft, never fully dark
+  // gentle radial softening (a cheap blur across the flow bands)
+  turb *= 0.85 + 0.15*fbm(vec2(r*0.8 - uTime*0.1, 3.0));
 
   vec3 col = bbody(tnorm * shift);
   return col * bright * turb * edge * 0.9;
@@ -319,7 +338,7 @@ void main(){
       gl.generateMipmap(gl.TEXTURE_2D); };
     img.src = 'assets/nwd-logo.png';
 
-    const SCALE = 0.85; // internal render scale for performance
+    const SCALE = 1.0; // internal render scale (1.0 = crisp; lower for perf)
     function resize(){
       const w = Math.floor(innerWidth*Math.min(devicePixelRatio,1.25)*SCALE);
       const h = Math.floor(innerHeight*Math.min(devicePixelRatio,1.25)*SCALE);
