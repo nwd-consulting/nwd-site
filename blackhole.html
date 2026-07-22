@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NWD — into the black hole</title>
+  <meta name="description" content="An NWD-branded cube falling into a Schwarzschild black hole, rendered with real gravitational light-bending." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #eef2f9; }
+    #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    .overlay { position: fixed; inset: 0; pointer-events: none; }
+    .topbar { position: absolute; top: 22px; left: 26px; right: 26px; display: flex;
+      align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: -.01em; font-size: 1.15rem;
+      text-shadow: 0 2px 20px rgba(0,0,0,.9); }
+    .brand img { height: 40px; width: auto; filter: invert(1) drop-shadow(0 2px 10px rgba(0,0,0,.6)); }
+    .nav { display: flex; gap: 22px; font-size: .95rem; }
+    .nav a { color: #cdd6ea; text-decoration: none; pointer-events: auto; text-shadow: 0 2px 12px rgba(0,0,0,.9); }
+    .nav a:hover { color: #fff; }
+    .hero { position: absolute; left: 6vw; bottom: 12vh; max-width: 620px; }
+    .hero .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: .78rem; font-weight: 700;
+      color: #6fe0d0; margin-bottom: 12px; text-shadow: 0 2px 16px rgba(0,0,0,1); }
+    .hero h1 { font-size: clamp(2.1rem, 5.5vw, 3.6rem); line-height: 1.05; letter-spacing: -.02em; margin: 0 0 14px;
+      text-shadow: 0 3px 30px rgba(0,0,0,1); }
+    .hero p { font-size: clamp(1rem, 2vw, 1.2rem); color: #c6cfe0; margin: 0; text-shadow: 0 2px 20px rgba(0,0,0,1); max-width: 34ch; }
+    .grad { background: linear-gradient(110deg, #ffb37a, #ff5e7a 45%, #7d8ff0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .physics { position: absolute; right: 26px; bottom: 22px; width: 340px; max-width: 46vw;
+      font-size: .72rem; line-height: 1.5; color: #9aa6bd; pointer-events: auto;
+      background: rgba(10,14,22,.42); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px; padding: 14px 16px; }
+    .physics b { color: #cdd6ea; font-weight: 600; }
+    .physics summary { cursor: pointer; color: #cdd6ea; font-weight: 600; font-size: .8rem; margin: -2px 0 8px; list-style: none; }
+    .physics summary::-webkit-details-marker { display: none; }
+    .physics ul { margin: 0; padding-left: 16px; }
+    .physics li { margin: 3px 0; }
+    .badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      font-size: .7rem; color: #8894ab; opacity: 0; transition: opacity .4s; }
+    #warn { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 40px; }
+    @media (max-width: 620px){ .physics { display: none; } .nav { display: none; } }
+  </style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div class="overlay">
+    <div class="topbar">
+      <div class="brand"><img src="assets/nwd-logo.png" alt="NWD" /> NWD Consulting</div>
+      <nav class="nav">
+        <a href="index.html">About</a>
+        <a href="services.html">Services</a>
+        <a href="index.html">Back to site</a>
+      </nav>
+    </div>
+    <div class="hero">
+      <p class="eyebrow">Research · Education · Technology</p>
+      <h1>Past the <span class="grad">event horizon</span></h1>
+      <p>We take on the problems where the ordinary rules stop applying.</p>
+    </div>
+    <details class="physics" open>
+      <summary>What's physically real here ▾</summary>
+      <ul>
+        <li><b>Light bending:</b> each pixel's ray is integrated along a true null geodesic of the Schwarzschild metric (<i>d²u/dφ² = −u + 1.5 r<sub>s</sub> u²</i>), RK4-stepped — so you see a real Einstein ring and the disk's underside lensed over the top.</li>
+        <li><b>Photon ring &amp; shadow:</b> the black disk is the r = r<sub>s</sub> horizon; the bright ring at ~1.5 r<sub>s</sub> is trapped light.</li>
+        <li><b>Accretion disk:</b> Keplerian flow with relativistic Doppler beaming (approaching side brighter/bluer, ∝ δ³), gravitational redshift √(1−r<sub>s</sub>/r), and a T ∝ r^−¾ profile.</li>
+        <li><b>The cube:</b> gravitationally redshifts and dims, is tidally <i>spaghettified</i> (stretched radially), and — from our vantage — asymptotically freezes and reddens at the horizon rather than crossing.</li>
+      </ul>
+    </details>
+    <div class="badge" id="badge">initialising WebGL…</div>
+  </div>
+  <div id="warn"><div><h1>WebGL2 not available</h1><p>This scene needs a WebGL2-capable browser.</p></div></div>
+
+  <script type="text/plain" id="vert">#version 300 es
+in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }
+</script>
+
+  <script type="text/plain" id="frag">#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCamPos, uCamF, uCamR, uCamU;
+uniform float uFocal;
+uniform sampler2D uLogo;
+
+// Cube (infalling object), all in units of Schwarzschild radius r_s = 1
+uniform vec3  uCubeC;      // center
+uniform vec3  uCubeA0, uCubeA1, uCubeA2; // orthonormal axes (A0 = radial)
+uniform vec3  uCubeH;      // half-extents (spaghettified)
+uniform float uCubeFade;   // 0 far -> 1 at horizon (drives redshift/dim/freeze)
+
+const float Rs   = 1.0;
+const float RIN  = 3.0;    // ISCO for Schwarzschild = 3 r_s
+const float ROUT = 14.0;
+const int   STEPS = 360;
+const float DPHI = 0.018;
+const float PI = 3.14159265;
+
+float hash(vec3 p){ p = fract(p*0.3183099 + 0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+
+// Procedural starfield sampled in a *direction* (so lensing distorts it)
+vec3 stars(vec3 dir){
+  vec3 d = normalize(dir);
+  vec3 col = vec3(0.0);
+  float scales[3]; scales[0]=520.0; scales[1]=260.0; scales[2]=130.0;
+  for(int i=0;i<3;i++){
+    vec3 g = floor(d*scales[i]);
+    float h = hash(g + float(i)*7.0);
+    if(h > 0.986){
+      float b = pow((h-0.986)/0.014, 5.0);
+      vec3 tint = mix(vec3(0.7,0.8,1.0), vec3(1.0,0.9,0.75), hash(g+3.0));
+      col += b*tint;
+    }
+  }
+  float neb = pow(max(0.0, 0.5 + 0.5*sin(d.x*2.3+1.0)*sin(d.y*3.1)*sin(d.z*2.7)), 4.0);
+  col += 0.025*vec3(0.25,0.35,0.7)*neb;
+  return col;
+}
+
+// simple cool->hot color ramp (approx blackbody)
+vec3 bbody(float t){
+  t = clamp(t,0.0,1.0);
+  vec3 c = mix(vec3(1.0,0.22,0.05), vec3(1.0,0.6,0.2), smoothstep(0.0,0.3,t));
+  c = mix(c, vec3(1.0,0.96,0.85), smoothstep(0.3,0.62,t));
+  c = mix(c, vec3(0.72,0.82,1.0), smoothstep(0.62,1.0,t));
+  return c;
+}
+
+// Emissive contribution of the accretion disk at equatorial crossing point P.
+// photon travels along pd (unit). Includes Doppler beaming + gravitational redshift.
+vec3 diskEmission(vec3 P, vec3 pd){
+  float r = length(P);
+  if(r < RIN || r > ROUT) return vec3(0.0);
+  float radial = clamp((r-RIN)/(ROUT-RIN), 0.0, 1.0);
+  float edge = smoothstep(0.0,0.06,radial) * (1.0 - smoothstep(0.8,1.0,radial)); // soft rim
+  float tnorm = pow(RIN/r, 0.75);                 // T ∝ r^-3/4
+  float bright = pow(RIN/r, 1.6);                 // inner disk far brighter
+
+  vec3 pdir = normalize(P);
+  vec3 vhat = normalize(cross(vec3(0.0,1.0,0.0), pdir)); // Keplerian orbital direction
+  float beta = clamp(sqrt(0.5/r), 0.0, 0.85);            // v = sqrt(M/r), M = r_s/2 = 0.5
+  float gamma = 1.0/sqrt(1.0 - beta*beta);
+  float cosang = dot(vhat, -pd);                          // line-of-sight velocity
+  float doppler = 1.0/(gamma*(1.0 - beta*cosang));        // relativistic Doppler δ
+  float grav = sqrt(max(0.0, 1.0 - Rs/r));                // gravitational redshift
+  float shift = doppler*grav;                             // observed/emitted frequency
+
+  bright *= pow(doppler, 3.0) * grav;                     // relativistic beaming + grav dimming
+
+  // turbulent banding
+  float ang = atan(P.z, P.x);
+  float turb = 0.55 + 0.45*sin(ang*7.0 + r*2.2 - uTime*1.4
+                + 9.0*hash(vec3(floor(r*2.5), floor(ang*3.0), 0.0)));
+
+  vec3 col = bbody(tnorm * shift);
+  return col * bright * turb * edge * 0.9;
+}
+
+// Ray vs oriented box (the cube). ro,rd in world space; returns nearest hit in [0,maxT].
+bool cubeHit(vec3 ro, vec3 rd, float maxT, out float tHit, out vec3 nrm, out vec2 uv){
+  vec3 d  = ro - uCubeC;
+  vec3 lo = vec3(dot(d,uCubeA0),  dot(d,uCubeA1),  dot(d,uCubeA2));
+  vec3 ld = vec3(dot(rd,uCubeA0), dot(rd,uCubeA1), dot(rd,uCubeA2));
+  vec3 h = uCubeH;
+  vec3 inv = 1.0/ld;
+  vec3 t1 = (-h - lo)*inv, t2 = (h - lo)*inv;
+  vec3 tmn = min(t1,t2), tmx = max(t1,t2);
+  float tN = max(max(tmn.x,tmn.y),tmn.z);
+  float tF = min(min(tmx.x,tmx.y),tmx.z);
+  if(tN > tF || tF < 0.0) return false;
+  float t = tN > 0.0 ? tN : tF;
+  if(t < 0.0 || t > maxT) return false;
+  vec3 lp = lo + ld*t;
+  vec3 an = abs(lp/h);
+  vec3 ln; vec2 fuv;
+  if(an.x >= an.y && an.x >= an.z){ ln = vec3(sign(lp.x),0.0,0.0); fuv = lp.yz/h.yz; }
+  else if(an.y >= an.z){          ln = vec3(0.0,sign(lp.y),0.0); fuv = lp.xz/h.xz; }
+  else {                          ln = vec3(0.0,0.0,sign(lp.z)); fuv = lp.xy/h.xy; }
+  uv  = fuv*0.5 + 0.5;
+  nrm = ln.x*uCubeA0 + ln.y*uCubeA1 + ln.z*uCubeA2;
+  tHit = t;
+  return true;
+}
+
+vec3 shadeCube(vec2 uv, vec3 n, vec3 vdir){
+  vec4 tex = texture(uLogo, vec2(uv.x, 1.0-uv.y));
+  vec3 body = vec3(0.05,0.07,0.12);
+  vec3 logo = vec3(0.92,0.96,1.0);
+  vec3 base = mix(body, logo, tex.a);
+  vec3 N = normalize(n);
+  float lit = 0.35 + 0.65*max(0.0, dot(N, normalize(vec3(0.1,1.0,0.35)))); // lit from disk side
+  base *= lit;
+  float f = uCubeFade;
+  base = mix(base, base*vec3(1.0,0.28,0.12), f);   // gravitational redshift toward red
+  base *= mix(1.0, 0.12, f);                        // dim & freeze near horizon
+  base += (1.0-f)*0.18*pow(1.0 - max(0.0,dot(N,-normalize(vdir))), 3.0)*vec3(0.6,0.7,1.0); // rim
+  return base;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  vec3 ro = uCamPos;
+  vec3 rd = normalize(uCamF*uFocal + uv.x*uCamR + uv.y*uCamU);
+
+  // set up the orbit plane (contains camera, ray, and BH center at origin)
+  float r = length(ro);
+  vec3 e1 = ro/r;                                   // radial (BH -> camera)
+  vec3 e2 = rd - dot(rd,e1)*e1;
+  float e2l = length(e2);
+  if(e2l < 1e-4){ e2 = normalize(cross(e1, vec3(0.0,1.0,0.0)) + vec3(1e-3)); e2l = 1.0; }
+  else e2 /= e2l;
+
+  float u = 1.0/r;
+  float w = -u * dot(rd,e1)/e2l;                    // du/dφ at start
+  float phi = 0.0;
+
+  vec3 prev = ro;
+  vec3 lastdir = rd;
+  vec3 emission = vec3(0.0);
+  vec3 opaque = vec3(0.0);
+  bool done = false;
+
+  for(int i=0;i<STEPS;i++){
+    float hh = DPHI;
+    // RK4 on (u,w): u' = w,  w' = -u + 1.5 u^2
+    float k1u=w,               k1w=-u+1.5*u*u;
+    float u2=u+0.5*hh*k1u;     float k2u=w+0.5*hh*k1w, k2w=-u2+1.5*u2*u2;
+    float u3=u+0.5*hh*k2u;     float k3u=w+0.5*hh*k2w, k3w=-u3+1.5*u3*u3;
+    float u4=u+hh*k3u;         float k4u=w+hh*k3w,     k4w=-u4+1.5*u4*u4;
+    u += hh/6.0*(k1u+2.0*k2u+2.0*k3u+k4u);
+    w += hh/6.0*(k1w+2.0*k2w+2.0*k3w+k4w);
+    phi += hh;
+
+    if(u <= 1e-4){ done = false; break; }           // escaped to infinity
+    r = 1.0/u;
+    vec3 pos = r*(cos(phi)*e1 + sin(phi)*e2);
+    vec3 seg = pos - prev;
+    float segl = length(seg);
+    vec3 sd = seg/max(segl,1e-6);
+    lastdir = sd;
+
+    if(r <= Rs){ opaque = vec3(0.0); done = true; break; }   // captured by horizon
+
+    // cube (opaque) — nearest surface along this segment
+    float tH; vec3 nH; vec2 uvH;
+    if(cubeHit(prev, sd, segl, tH, nH, uvH)){
+      opaque = shadeCube(uvH, nH, sd);
+      done = true; break;
+    }
+
+    // accretion disk crossing (equatorial plane y = 0), emissive & additive
+    if(prev.y*pos.y < 0.0){
+      float tt = prev.y/(prev.y - pos.y);
+      vec3 P = mix(prev, pos, tt);
+      emission += diskEmission(P, sd);
+    }
+
+    prev = pos;
+    if(r > 42.0){ done = true; opaque = stars(lastdir); break; }
+  }
+  if(!done) opaque = stars(lastdir);
+
+  vec3 col = opaque + emission;
+  col = col/(1.0 + col);              // Reinhard tone map
+  col = pow(col, vec3(1.0/2.2));      // gamma
+  fragColor = vec4(col, 1.0);
+}
+</script>
+
+  <script>
+  (function(){
+    const canvas = document.getElementById('gl');
+    const gl = canvas.getContext('webgl2', { antialias:false, powerPreference:'high-performance' });
+    const warn = document.getElementById('warn');
+    const badge = document.getElementById('badge');
+    if(!gl){ warn.style.display='grid'; return; }
+
+    function compile(type, src){
+      const s = gl.createShader(type); gl.shaderSource(s, src.trim()); gl.compileShader(s);
+      if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    }
+    const prog = gl.createProgram();
+    try {
+      gl.attachShader(prog, compile(gl.VERTEX_SHADER, document.getElementById('vert').textContent));
+      gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById('frag').textContent));
+      gl.linkProgram(prog);
+      if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    } catch(e){ warn.style.display='grid'; warn.querySelector('p').textContent = e.message; return; }
+    gl.useProgram(prog);
+
+    // fullscreen triangle
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    const ploc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(ploc); gl.vertexAttribPointer(ploc, 2, gl.FLOAT, false, 0, 0);
+
+    const U = n => gl.getUniformLocation(prog, n);
+    const u = { res:U('uRes'), time:U('uTime'), camPos:U('uCamPos'), camF:U('uCamF'),
+      camR:U('uCamR'), camU:U('uCamU'), focal:U('uFocal'), logo:U('uLogo'),
+      cubeC:U('uCubeC'), cubeA0:U('uCubeA0'), cubeA1:U('uCubeA1'), cubeA2:U('uCubeA2'),
+      cubeH:U('uCubeH'), cubeFade:U('uCubeFade') };
+
+    // logo texture on the cube faces
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const img = new Image();
+    img.onload = () => { gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+      gl.generateMipmap(gl.TEXTURE_2D); };
+    img.src = 'assets/nwd-logo.png';
+
+    const SCALE = 0.85; // internal render scale for performance
+    function resize(){
+      const w = Math.floor(innerWidth*Math.min(devicePixelRatio,1.25)*SCALE);
+      const h = Math.floor(innerHeight*Math.min(devicePixelRatio,1.25)*SCALE);
+      if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+    }
+    addEventListener('resize', resize); resize();
+
+    // vec helpers
+    const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+    const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+    const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l];};
+    const smoothstep=(e0,e1,x)=>{const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+
+    const R_START = 16.0, PERIOD = 20.0;
+    let t0 = null;
+    function frame(ts){
+      if(t0===null) t0 = ts;
+      const t = (ts - t0)/1000;
+      resize();
+      gl.viewport(0,0,canvas.width,canvas.height);
+
+      // camera slowly orbits, slightly above the disk (Interstellar-style tilt)
+      const a = 0.08*t;
+      const camPos = [Math.sin(a)*22.0, 3.4, Math.cos(a)*22.0];
+      const fwd = norm(sub([0,0,0], camPos));
+      const right = norm(cross(fwd, [0,1,0]));
+      const up = cross(right, fwd);
+      const fov = 52*Math.PI/180;
+      const focal = 1.0/Math.tan(fov*0.5);
+
+      // infalling cube: radial free-fall that eases (time dilation) toward the horizon
+      const phase = (t % PERIOD)/PERIOD;
+      const rc = 1.02 + (R_START-1.02)*Math.pow(1.0-phase, 2.6);
+      const d0 = norm([0.34, 0.24, 0.90]);          // infall direction (above disk, camera side)
+      const center = [d0[0]*rc, d0[1]*rc, d0[2]*rc];
+      const A0 = d0;                                 // radial axis
+      const A1 = norm(cross([0,1,0], A0));
+      const A2 = cross(A0, A1);
+      const s = Math.min(7.0, Math.max(1.0, 0.9/(rc-1.0)));  // spaghettification factor
+      const b = 0.78;
+      const H = [b*s, b/Math.sqrt(s), b/Math.sqrt(s)];
+      const fade = smoothstep(4.0, 1.06, rc);        // 0 far -> 1 at horizon
+
+      gl.uniform2f(u.res, canvas.width, canvas.height);
+      gl.uniform1f(u.time, t);
+      gl.uniform3fv(u.camPos, camPos);
+      gl.uniform3fv(u.camF, fwd);
+      gl.uniform3fv(u.camR, right);
+      gl.uniform3fv(u.camU, up);
+      gl.uniform1f(u.focal, focal);
+      gl.uniform1i(u.logo, 0); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform3fv(u.cubeC, center);
+      gl.uniform3fv(u.cubeA0, A0); gl.uniform3fv(u.cubeA1, A1); gl.uniform3fv(u.cubeA2, A2);
+      gl.uniform3fv(u.cubeH, H);
+      gl.uniform1f(u.cubeFade, fade);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      badge.style.opacity = 0;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
