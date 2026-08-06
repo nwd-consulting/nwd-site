@@ -304,6 +304,15 @@ def clean(html: str, prefix: str, stats: dict) -> str:
     html, c = re.subn(r'\s+sizes=(["\'])[^"\']*\1', "", html)
     bump("sizes_dropped", c)
 
+    # Bio pages proxy the real photo through Jetpack's image CDN
+    # (i0.wp.com/<host>/wp-content/uploads/...), so the underlying path is
+    # recoverable — point those at our own copy rather than flattening every
+    # page's preview to the logo.
+    html, c = re.subn(
+        r"""https://i[0-9]\.wp\.com/[^/"']+/wp-content/uploads/([^"'?]+)(\?[^"']*)?""",
+        r"https://nwd-consulting.com/wp-content/uploads/\1", html, flags=re.I)
+    bump("og_image_proxied", c)
+
     # 2b-iii. Social preview images pointed at s0.wp.com/i/blank.jpg - a literally
     #         blank placeholder, on the host being retired. Every share of this
     #         site on Slack, LinkedIn or iMessage rendered an empty box. Social
