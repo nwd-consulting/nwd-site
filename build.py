@@ -288,6 +288,34 @@ def clean(html: str, prefix: str, stats: dict) -> str:
     if c:
         bump("delinked_image", c)
 
+    # 2b-ii. Drop srcset/sizes entirely. wget's --convert-links corrupts srcset
+    #        when the replacement string is shorter than the original, which is
+    #        exactly what absolute->relative conversion does. The damage is
+    #        in-place overwriting, so values end up like
+    #          "...png%3Fw=150&allow_lossy=1sy=1 15../wp-content/..."
+    #        with fragments of the next candidate bleeding into the previous one.
+    #        Every srcset in the mirror is affected. Browsers silently fall back to
+    #        src, which is why the pages looked correct and nothing caught it.
+    #        Rebuilding these from disk is possible but not worth it for
+    #        400x400 headshots; dropping them costs a little bandwidth and
+    #        removes a whole class of silent wrongness.
+    html, c = re.subn(r'\s+srcset=(["\'])[^"\']*\1', "", html)
+    bump("srcset_dropped", c)
+    html, c = re.subn(r'\s+sizes=(["\'])[^"\']*\1', "", html)
+    bump("sizes_dropped", c)
+
+    # 2b-iii. Social preview images pointed at s0.wp.com/i/blank.jpg - a literally
+    #         blank placeholder, on the host being retired. Every share of this
+    #         site on Slack, LinkedIn or iMessage rendered an empty box. Social
+    #         scrapers require an absolute URL, so this is the one place a
+    #         hard-coded domain is correct rather than lazy.
+    html, c = re.subn(
+        r'(<meta[^>]+(?:property|name)=["\'](?:og:image|twitter:image)[^>]*content=["\'])'
+        r'https://s[0-9]\.wp\.com/[^"\']*(["\'])',
+        r'\1https://nwd-consulting.com/wp-content/uploads/2026/07/nwd-logo.png\2',
+        html, flags=re.I)
+    bump("og_image", c)
+
     # 2c. Internal navigation still pointing at the old WordPress host. These are
     #     real links between pages of this site - bio pages, service pages, posts -
     #     that would break the day the WordPress.com plan is cancelled. Rewrite them
@@ -466,7 +494,30 @@ def main() -> int:
 
     # robots.txt still advertises WordPress.com sitemaps that don't exist here.
     (REPO / "robots.txt").write_text(
-        "User-agent: *\nAllow: /\n", encoding="utf-8")
+        "User-agent: *\nAllow: /\nSitemap: https://nwd-consulting.com/sitemap.xml\n",
+        encoding="utf-8")
+
+    # A sitemap listing the pages that actually exist. The mirror's robots.txt
+    # advertised WordPress.com's, which this build does not have.
+    urls = sorted(
+        "https://nwd-consulting.com/" + str(p.parent.relative_to(REPO)).replace(".", "").lstrip("/")
+        for p in REPO.rglob("index.html")
+        if not {"s0.wp.com", "s1.wp.com", "s2.wp.com", ".git"} & set(p.parts))
+    body = "\n".join(f"  <url><loc>{u.rstrip('/')}/</loc></url>" for u in urls)
+    (REPO / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{body}\n</urlset>\n", encoding="utf-8")
+
+    # GitHub Pages serves 404.html for unmatched paths. Without it visitors get
+    # GitHub's own branded 404, which looks like the site is broken rather than
+    # the link being wrong. Built from the real homepage so it carries the site's
+    # styling rather than being an unstyled orphan.
+    home = (REPO / "index.html").read_text(encoding="utf-8", errors="replace")
+    notfound = re.sub(
+        r"<title>[^<]*</title>", "<title>Page not found — NWD Consulting Network</title>",
+        home, count=1)
+    (REPO / "404.html").write_text(notfound, encoding="utf-8")
 
     print(f"files copied      : {copied}")
     print(f"stray CDN pages   : {strays} deleted")

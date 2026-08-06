@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://nwd-consulting.com/sitemap.xml
