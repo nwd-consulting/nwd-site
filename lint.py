@@ -150,12 +150,69 @@ def check_dead_ui() -> list[str]:
     return sorted(set(bad))
 
 
+def check_meta_content() -> list[str]:
+    """og:image and friends live in content=, which src/href checks never see.
+
+    Every page's social preview pointed at s0.wp.com/i/blank.jpg - a blank
+    placeholder on the host being retired - so every share rendered an empty box.
+    Invisible to the reference checks and invisible in a browser.
+    """
+    bad = []
+    for page in pages():
+        text = page.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r'<meta[^>]+content=(["\'])((?:https?:)?//[^"\']+)\1', text):
+            host = html_lib.unescape(m.group(2)).split("//", 1)[1].split("/")[0]
+            if host.endswith(("wp.com", "wordpress.com")):
+                bad.append(f"{page.relative_to(ROOT)}  meta content -> {host}")
+    return sorted(set(bad))
+
+
+def check_srcset() -> list[str]:
+    """A malformed srcset is invisible: browsers fall back to src and render fine.
+
+    wget's --convert-links overwrites in place when the replacement is shorter
+    than the original, which is what absolute->relative conversion always is. It
+    corrupted all 108 srcset attributes in this mirror, producing candidates like
+    "...allow_lossy=1sy=1 15../wp-content/..." - and every page still looked right.
+    """
+    bad = []
+    for page in pages():
+        text = page.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r'srcset=(["\'])([^"\']*)\1', text):
+            for candidate in html_lib.unescape(m.group(2)).split(","):
+                candidate = candidate.strip()
+                if not candidate:
+                    continue
+                parts = candidate.split()
+                # A well-formed candidate is "url" or "url 123w" / "url 2x".
+                if len(parts) > 2 or (len(parts) == 2 and not re.fullmatch(r"\d+(\.\d+)?[wx]", parts[1])):
+                    bad.append(f"{page.relative_to(ROOT)}  malformed srcset: {candidate[:60]}")
+                    break
+    return sorted(set(bad))
+
+
+def check_deploy_surface() -> list[str]:
+    """Files a static host expects, which a crawl of a CMS never produces."""
+    missing = []
+    for name, why in [
+        ("404.html", "unmatched paths get the host's branded error page instead of ours"),
+        ("robots.txt", "crawlers get no guidance"),
+        ("sitemap.xml", "the only authoritative list of what exists"),
+    ]:
+        if not (ROOT / name).is_file():
+            missing.append(f"{name} missing — {why}")
+    return missing
+
+
 CHECKS = [
     ("filenames are URL-safe", check_filenames),
     ("local references resolve", check_references),
     ("no links to retiring hosts", check_external_hosts),
     ("fonts and scripts are self-hosted", check_external_assets),
     ("no dead WordPress UI", check_dead_ui),
+    ("meta content avoids retiring hosts", check_meta_content),
+    ("srcset is well-formed", check_srcset),
+    ("deploy surface is present", check_deploy_surface),
 ]
 
 
