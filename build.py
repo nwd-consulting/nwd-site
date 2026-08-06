@@ -207,6 +207,26 @@ def strip_wordpress_chrome(html: str, stats: dict) -> str:
     html, c = re.subn(r'<div[^>]*id=[\'"]likes-other-gravatars[\'"].*?</div>', "", html, flags=re.I | re.S)
     bump("likes_gravatars", c)
 
+    # Jetpack Likes on blog posts hides behind three different forms, which is why
+    # stripping <iframe> alone left it in place: an external stylesheet for the
+    # comment editor, a wrapper div holding the iframe URL in data-src for lazy
+    # loading, and inline JS config. The feature dies with WordPress, and the
+    # stylesheet is a genuine external dependency on a host we are leaving.
+    html, c = re.subn(r'<link[^>]+widgets\.wp\.com[^>]*>', "", html, flags=re.I)
+    bump("widgets_css", c)
+    # NB single quotes: WordPress emits class='...' here and class="..." elsewhere.
+    # Matching only double quotes is what left this in place the first two times.
+    html, c = strip_block(
+        html, r"""<div[^>]*class=["'][^"']*jetpack-likes-widget-wrapper""", "div")
+    bump("likes_widget", c)
+
+    # DNS-prefetch and preconnect hints for WordPress.com hosts. Inert, but they
+    # ask the browser to resolve hosts this site no longer uses.
+    html, c = re.subn(
+        r'<link[^>]+rel=[\'"](?:dns-prefetch|preconnect)[\'"][^>]+(?:wp\.com|wordpress\.com)[^>]*>',
+        "", html, flags=re.I)
+    bump("dns_prefetch", c)
+
     # Metadata pointing at the WordPress install we are retiring.
     for pat, key in [
         (r'<link[^>]+rel=[\'"]EditURI[\'"][^>]*>', "editURI"),
@@ -416,6 +436,33 @@ def main() -> int:
         text = strip_wordpress_chrome(text, stats)
         text = rewrite_sanitised(text, mapping, stats)
         f.write_text(text, encoding="utf-8")
+
+    # Relocalising internal links can expose links that were already broken on the
+    # original site. /2026/05/19/edumetrix-ecosystem-education-partners/ 404s
+    # upstream and is absent from the sitemap, so rewriting it to a local path
+    # turned a broken external link into a broken internal one. Unwrap any anchor
+    # whose target does not exist in the build, keeping the link text.
+    dead = 0
+    for f in REPO.rglob("*.html"):
+        if any(p in {"wp-content", "s0.wp.com", "s1.wp.com", "s2.wp.com"} for p in f.parts):
+            continue
+        text = f.read_text(encoding="utf-8", errors="replace")
+
+        def unwrap(m, _f=f):
+            nonlocal dead
+            href = html_lib.unescape(m.group(1))
+            if href.startswith(("http", "//", "#", "mailto:", "data:")) or "{" in href:
+                return m.group(0)
+            target = (_f.parent / urllib.parse.unquote(href.split("#")[0])).resolve()
+            if target.exists() or (target / "index.html").exists():
+                return m.group(0)
+            dead += 1
+            return m.group(2)
+
+        text = re.sub(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', unwrap, text, flags=re.S)
+        f.write_text(text, encoding="utf-8")
+    if dead:
+        print(f"dead links unwrapped: {dead}")
 
     # robots.txt still advertises WordPress.com sitemaps that don't exist here.
     (REPO / "robots.txt").write_text(
