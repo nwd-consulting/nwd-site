@@ -1,0 +1,102 @@
+name: Lint
+
+# Runs on every PR and every push to main. The checks in lint.py all correspond
+# to bugs that actually happened while building this site, so this is a
+# regression suite rather than style enforcement.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Static checks
+        run: python3 lint.py
+
+      # lint.py reasons about the filesystem. This catches the other half of the
+      # problem: whether a real HTTP server agrees the files are reachable.
+      # Python's http.server is unusually tolerant of odd filenames, so a pass
+      # here is necessary but not sufficient — which is why lint.py forbids the
+      # characters outright rather than trusting any one server's behaviour.
+      - name: Serve and fetch every page
+        run: |
+          python3 -m http.server 8000 --bind 127.0.0.1 &
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:8000/ && break
+            sleep 1
+          done
+
+          fail=0
+          total=0
+          while IFS= read -r page; do
+            url="http://127.0.0.1:8000/${page#./}"
+            url="${url%index.html}"
+            total=$((total + 1))
+            code=$(curl -sS -o /dev/null -m 15 -w '%{http_code}' "$url")
+            if [ "$code" != "200" ]; then
+              echo "::error::$code $url"
+              fail=$((fail + 1))
+            fi
+          done < <(find . -name index.html \
+                     -not -path './.git/*' \
+                     -not -path './s0.wp.com/*' \
+                     -not -path './s1.wp.com/*' \
+                     -not -path './s2.wp.com/*')
+
+          echo "$total pages checked, $fail failed"
+          [ "$fail" -eq 0 ]
+
+      - name: Every referenced asset returns 200
+        run: |
+          python3 - <<'PY'
+          import html, re, subprocess, sys, urllib.parse
+          from pathlib import Path
+
+          skip = {".git", "s0.wp.com", "s1.wp.com", "s2.wp.com"}
+          refs = set()
+          for page in Path(".").rglob("*.html"):
+              if skip & set(page.parts):
+                  continue
+              text = page.read_text(encoding="utf-8", errors="replace")
+              for m in re.finditer(r"""(?:src|href)=(["'])([^"']+)\1""", text):
+                  raw = html.unescape(m.group(2))
+                  if raw.startswith(("http", "//", "#", "mailto:", "data:", "javascript:")):
+                      continue
+                  if raw.startswith("context.") or "{" in raw:
+                      continue
+                  p = raw.split("#")[0]
+                  if not p or p.endswith("/"):
+                      continue
+                  target = (page.parent / urllib.parse.unquote(p)).resolve()
+                  try:
+                      refs.add(str(target.relative_to(Path(".").resolve())))
+                  except ValueError:
+                      print(f"::error::{page} references outside the repo: {raw[:70]}")
+                      sys.exit(1)
+
+          bad = []
+          for r in sorted(refs):
+              code = subprocess.run(
+                  ["curl", "-sS", "-o", "/dev/null", "-m", "15", "-w", "%{http_code}",
+                   "http://127.0.0.1:8000/" + urllib.parse.quote(r)],
+                  capture_output=True, text=True).stdout
+              if code != "200":
+                  bad.append(f"{code} {r}")
+
+          print(f"{len(refs)} distinct assets checked, {len(bad)} failed")
+          for b in bad[:25]:
+              print(f"::error::{b}")
+          sys.exit(1 if bad else 0)
+          PY
