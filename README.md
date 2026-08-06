@@ -1,56 +1,67 @@
 # NWD Consulting Network — website
 
-Clean, responsive static site for the New World Disorder (NWD) consulting collective.
-Rebuilt off the old WordPress site (`nwdconsulting.wordpress.com`). No frameworks, no
-build toolchain required to serve — just static HTML/CSS/JS.
+The public site for the New World Disorder consulting collective, at
+[nwd-consulting.com](https://nwd-consulting.com).
 
-## Structure
+Static HTML. No framework, no build step to serve it. Deployed by **Cloudflare
+Pages** from `main`.
 
-```
-index.html          Home (hero, capabilities, testimonials, CTA)
-about.html          Mission + team grid (rendered live from data/team.json)
-services.html       Five service areas + intake CTA
-people/<slug>.html  Full bio pages (generated from team.json)
-data/team.json      ← THE editable team directory (single source of truth)
-assets/css/styles.css
-assets/js/team.js   Fetches team.json and renders the team grid
-build_bios.py       Regenerates people/*.html from team.json
-```
+## What this actually is
 
-## Editing the team ("sheet-fed team page")
+A faithful copy of the WordPress.com site Sarah built, with everything that
+needed a WordPress server behind it removed. It is not a hand-written site and
+should not be mistaken for one — the markup is WordPress block output, and it
+reads like it.
 
-Everything about the team lives in **`data/team.json`**. Each person is one object:
+That is a deliberate trade. The alternative, attempted in July 2026, was to
+hand-write a replacement; it lost the design and every image on the site. This
+approach keeps both.
 
-```json
-{
-  "slug": "jane-doe",
-  "name": "Jane Doe, Ph.D.",
-  "group": "Founders",
-  "title": "Role | Role | Role",
-  "bio": "Optional full prose. If present, a bio page is generated."
-}
-```
+**Treat this repo as a snapshot, not a codebase.** It is a good bridge off
+WordPress and a poor foundation to build on. If NWD wants a site that developers
+maintain, that is a separate project.
 
-- The **team grid on `/about`** updates automatically from this file — no rebuild, no code change. (This is the MVP of the sheet-fed page; the next step is pointing `assets/js/team.js` at a Google Sheet published-to-web CSV.)
-- If a person has a `bio`, regenerate their full page: `python3 build_bios.py`.
-- `groupOrder` controls the order of the group headings.
+## Regenerating
 
-## Local preview
+    ./build.py            # rebuild from the mirror
+    ./build.py --check    # report what it would do, write nothing
 
-The team grid uses `fetch()`, which browsers block on `file://`. Serve over HTTP:
+The source is a mirror at `~/workspace/archive/nwd-site-mirror-2026-08-06/`,
+captured from `sitemap.xml` rather than by crawling — crawling alone missed ten
+pages that nothing linked to. See that directory's `PROVENANCE.md`.
 
-```bash
-cd nwd-site
-python3 -m http.server 8000
-# open http://localhost:8000
-```
+**`build.py` stops working when the WordPress.com plan is cancelled**, because
+its source disappears. From that point this repo is the source, and edits are
+edits to committed HTML.
 
-## Deploy
+## Checks
 
-Hosted on **GitHub Pages** from the repo root via GitHub Actions
-(`.github/workflows/pages.yml`). Push to `main` and Pages publishes automatically.
+    ./lint.py                    # eight checks
+    ./lint.py --root path/to/dir # against any tree
 
-## Photos
+Every rule exists because the corresponding bug shipped, or came within one merge
+of shipping. Each carries a comment naming the incident, so it doesn't get
+deleted later as noise. CI runs the same suite on every pull request, then serves
+the site and fetches every page and asset over real HTTP.
 
-The old site had no headshots, so cards use generated initial-avatars as placeholders.
-To add real photos, add a `photo` field per person and extend the card/bio templates.
+If you find a bug here, **add the check that would have caught it** in the same
+change.
+
+## Things worth knowing before you edit
+
+- **Filenames must stay URL-safe.** wget originally saved assets with query
+  strings baked into their names, so stylesheets lived at paths containing `?`,
+  `%` and `&`. Windows cannot check out a repo containing those.
+- **`srcset` is deliberately absent.** wget's `--convert-links` corrupted all 108
+  of them, in a way browsers hide by falling back to `src`. Dropped rather than
+  rebuilt; these are 400×400 headshots.
+- **The intake form is a Google Form.** A static site cannot accept a POST. The
+  link appears on the 8 pages that previously carried the Jetpack contact form.
+- **Social preview images use absolute URLs.** Scrapers require it; this is the
+  one place a hard-coded domain is correct.
+
+## Contact and content changes
+
+Editing this site currently means a pull request. That is a regression from
+WordPress, where Sarah could edit through a UI, and it is tracked as
+[NEW-89](https://linear.app/new-world-disorder/issue/NEW-89).
