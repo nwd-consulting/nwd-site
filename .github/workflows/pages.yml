@@ -1,0 +1,99 @@
+name: Deploy to GitHub Pages
+
+# WHY THIS FILE EXISTS, AND WHY IT WAS ONCE DELETED
+#
+# This workflow was removed on 2026-08-06 in commit 987a96e ("Move to Cloudflare
+# Pages") as part of PR #4. The intent was sound: the plan is to serve
+# nwd-consulting.com from Cloudflare Pages, because GitHub Pages behind
+# Cloudflare DNS breaks certificate provisioning with the orange cloud on and
+# offers no configurable redirects.
+#
+# The unintended consequence was not noticed for three days. The repository's
+# GitHub Pages configuration was left at `build_type: "workflow"`, and with no
+# workflow present, *nothing deployed*. Pushes to main succeeded and published
+# nothing. The last real deploy was 2026-07-22, three weeks and two merged pull
+# requests before the actual site content landed.
+#
+# The visible result, measured 2026-08-09: of the 30 pages in this repository,
+# https://nwd-consulting.github.io/nwd-site/ served 1 (a stale July homepage)
+# and returned 404 for the other 29 — every bio, every service page, the about
+# page and the privacy policy.
+#
+# So this file is restored deliberately, and it is not a reversal of the
+# Cloudflare Pages decision. Until the domain is cut over, the github.io URL is
+# the only public rendering of this site, and it should show the real thing
+# rather than a broken fragment. It also gives the cutover a working staging
+# target to diff against. When Cloudflare Pages takes over serving
+# nwd-consulting.com, this workflow can be deleted again — but delete the Pages
+# *configuration* in the same change, or the same silent-no-deploy bug returns.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. A cancelled older run is correct here: the newest
+# commit on main is always the one that should be serving.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The repo is the deploy artifact — there is no build step. .nojekyll is
+      # committed at the root so that Jekyll does not eat the _static/
+      # directory, whose leading underscore it would otherwise treat as private.
+      - name: Confirm .nojekyll is present
+        run: test -f .nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      # A deploy that reports success while serving 404s is exactly the failure
+      # this file was restored to fix, so the workflow verifies its own result
+      # rather than trusting the deploy step's exit code. Every page in
+      # sitemap.xml must answer 200 at the published URL.
+      - name: Every page in sitemap.xml is reachable at the deployed URL
+        run: |
+          base="${{ steps.deployment.outputs.page_url }}"
+          base="${base%/}"
+          echo "Verifying against $base"
+
+          # Pages' CDN can lag the deploy by a few seconds.
+          sleep 20
+
+          fail=0
+          total=0
+          while IFS= read -r path; do
+            total=$((total + 1))
+            url="$base$path"
+            code=$(curl -sS -o /dev/null -L -m 30 --retry 3 --retry-delay 5 \
+                        -w '%{http_code}' "$url")
+            if [ "$code" != "200" ]; then
+              echo "::error::$code $url"
+              fail=$((fail + 1))
+            fi
+          done < <(grep -o '<loc>[^<]*</loc>' sitemap.xml \
+                     | sed 's|<loc>https://nwd-consulting.com||; s|</loc>||' \
+                     | sed 's|^$|/|')
+
+          echo "$total deployed pages checked, $fail failed"
+          [ "$fail" -eq 0 ]
