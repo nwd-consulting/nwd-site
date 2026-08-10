@@ -3,8 +3,28 @@
 The public site for the New World Disorder consulting collective, at
 [nwd-consulting.com](https://nwd-consulting.com).
 
-Static HTML. No framework, no build step to serve it. Deployed by **Cloudflare
-Pages** from `main`.
+Static HTML. No framework, no build step to serve it.
+
+## Where this is actually served from, as of 2026-08-09
+
+Two things are true at once, and conflating them has already cost three days:
+
+- **`nwd-consulting.com` still serves WordPress.com.** The domain has not been
+  cut over. Its A records are `192.0.78.24` and `192.0.78.25` (Automattic).
+  Nothing in this repository is reaching the public at that address yet.
+- **`main` deploys to <https://nwd-consulting.github.io/nwd-site/>** via
+  `.github/workflows/pages.yml`. That is the only public rendering of this repo
+  today.
+
+**Cloudflare Pages is still the intended destination** for the custom domain,
+for the reasons in NEW-12. The GitHub Pages workflow is a bridge, not a reversal
+of that decision — see the comment block at the top of `pages.yml`, which
+records what happened when the workflow was deleted while the Pages
+configuration was left switched on: pushes to `main` published nothing for three
+days, and 29 of 30 pages served 404 to the public.
+
+The cutover runbook — exact records for both hosting options, with rollback —
+is at `~/workspace/nwd/site/DNS-CUTOVER.md`.
 
 ## What this actually is
 
