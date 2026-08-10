@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import html as html_lib
+import json
 import re
 import sys
 import urllib.parse
@@ -204,9 +205,75 @@ def check_deploy_surface() -> list[str]:
     return missing
 
 
+def check_es_modules() -> list[str]:
+    """ES modules must be servable as JavaScript, and their bare specifiers must resolve.
+
+    Two bugs shipped here on 2026-08-06 and were invisible until someone
+    compared the rendered nav against the WordPress original on 2026-08-09.
+    Both broke the site's navigation menu on every page: it rendered as a
+    permanently-expanded vertical list with a stray hamburger and close button,
+    because the WordPress Navigation block's Interactivity API code never ran.
+
+    1. Script filenames had lost their `.js` extension. wget saved
+       `view.min.js?m=...&ver=...` and build.py made it URL-safe as
+       `view.min.js_m_..._ver_...` — no extension, so a static host serves it as
+       text/plain or octet-stream. Browsers apply a STRICT MIME check to
+       `type="module"` scripts and refuse to execute a non-JavaScript type.
+       Classic scripts are more forgiving, which is why nothing else broke and
+       why this was easy to miss.
+
+    2. The importmap was never de-WordPressed at all. It still carried absolute
+       root paths with query strings (`/wp-content/...?m=...&ver=...`), which
+       resolve to nothing in a static mirror, and it named two modules
+       (`interactivity-router`, `a11y`) that the mirror had never downloaded —
+       wget does not parse importmap JSON, so it never saw them referenced.
+
+    The lesson generalises: every other check in this file reasons about `src`
+    and `href` attributes. An importmap is JSON inside a <script> tag, so it was
+    invisible to all of them.
+    """
+    bad = []
+    for page in pages():
+        text = page.read_text(encoding="utf-8", errors="surrogateescape")
+        rel = page.relative_to(ROOT)
+
+        # 1. every module script must end in .js
+        for m in re.finditer(r"<script[^>]*\btype=[\"']module[\"'][^>]*>", text):
+            src = re.search(r"\bsrc=[\"']([^\"']+)[\"']", m.group(0))
+            if src and not src.group(1).split("?")[0].endswith(".js"):
+                bad.append(f"{rel}  module script is not served as .js: {src.group(1)[-70:]}")
+
+        # 2. every importmap target must be a relative URL that exists on disk
+        for im in re.finditer(
+            r"<script[^>]*\btype=[\"']importmap[\"'][^>]*>(.*?)</script>", text, re.S
+        ):
+            try:
+                imports = json.loads(im.group(1)).get("imports", {})
+            except json.JSONDecodeError as exc:
+                bad.append(f"{rel}  importmap is not valid JSON: {exc}")
+                continue
+            for name, url in imports.items():
+                if not url.startswith((".", "/")):
+                    bad.append(f"{rel}  importmap {name} is not a URL: {url[:60]}")
+                    continue
+                if url.startswith("/"):
+                    bad.append(
+                        f"{rel}  importmap {name} is root-absolute, which breaks "
+                        f"under a subpath: {url[:60]}"
+                    )
+                    continue
+                if "?" in url:
+                    bad.append(f"{rel}  importmap {name} keeps a query string: {url[-60:]}")
+                    continue
+                if not (page.parent / urllib.parse.unquote(url)).resolve().is_file():
+                    bad.append(f"{rel}  importmap {name} -> missing: {url[-70:]}")
+    return bad
+
+
 CHECKS = [
     ("filenames are URL-safe", check_filenames),
     ("local references resolve", check_references),
+    ("ES modules load and resolve", check_es_modules),
     ("no links to retiring hosts", check_external_hosts),
     ("fonts and scripts are self-hosted", check_external_assets),
     ("no dead WordPress UI", check_dead_ui),
