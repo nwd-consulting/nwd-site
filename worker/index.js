@@ -338,7 +338,7 @@ export default {
     const p = url.pathname;
     try {
       if (p === '/auth/google') return authStart(url, env);
-      if (p === '/auth/google/callback') return authCallback(request, url, env);
+      if (p === '/auth/google/callback') return await authCallback(request, url, env);
       if (p === '/auth/dev') return (await devLogin(url, env)) || env.ASSETS.fetch(request);
       if (p === '/auth/logout') {
         const id = readCookie(request, SESSION_COOKIE);
@@ -355,7 +355,7 @@ export default {
         // Writes come only from the editor page, which is same-origin.
         const origin = request.headers.get('origin');
         if (request.method !== 'GET' && origin && origin !== url.origin) return json({ error: 'bad origin' }, 403);
-        return adminApi(request, url, env, email);
+        return await adminApi(request, url, env, email);
       }
       if (p === '/admin' || p === '/admin/') {
         if (!(await currentUser(request, env))) return Response.redirect(new URL('/auth/google', url).toString(), 302);
@@ -365,7 +365,7 @@ export default {
       }
 
       if (p === '/blog') return Response.redirect(new URL('/blog/', url).toString(), 301);
-      if (p === '/blog/') return blogIndex(request, env);
+      if (p === '/blog/') return await blogIndex(request, env);
       const m = /^\/blog\/([a-z0-9-]+)\/?$/.exec(p);
       if (m) {
         if (!p.endsWith('/')) return Response.redirect(new URL(`/blog/${m[1]}/${url.search}`, url).toString(), 301);
@@ -377,7 +377,7 @@ export default {
       if (p === '/services' || p === '/services/' || p === '/services/index.html') {
         return Response.redirect(new URL('/#services', url).toString(), 301);
       }
-      if (p === '/' || p === '/index.html') return homepage(request, env);
+      if (p === '/' || p === '/index.html') return await homepage(request, env);
       return env.ASSETS.fetch(request);
     } catch (e) {
       console.error(e && e.stack ? e.stack : e);
