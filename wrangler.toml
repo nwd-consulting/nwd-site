@@ -8,6 +8,18 @@ compatibility_date = "2025-09-08"
 # The NWD Cloudflare account (Sarah's), which also holds the nwd-consulting.com zone.
 account_id = "301d0656603a147d1e21498f19ef7e6c"
 
+# nwd-consulting.com and www are Worker Custom Domains: Cloudflare manages their DNS
+# records and certificates. Cut over from WordPress.com on 2026-10-02 with Sarah's
+# go-ahead. MX/TXT (Google Workspace mail) are separate records and untouched.
+# Keep the workers.dev address and preview URLs alongside the custom domains: the agent
+# workflow, the OAuth redirect URIs and the chatbot registry all name it.
+workers_dev = true
+preview_urls = true
+routes = [
+  { pattern = "nwd-consulting.com", custom_domain = true },
+  { pattern = "www.nwd-consulting.com", custom_domain = true },
+]
+
 [assets]
 directory = "."
 binding = "ASSETS"
