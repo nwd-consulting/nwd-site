@@ -1,0 +1,42 @@
+# Production: whatever is on main is what nwd-site serves. Merging ai-main into main is
+# the release, and it stays Jake's.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: python3 lint.py
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npm ci --silent
+          npx wrangler d1 migrations apply nwd-blog --remote
+          npx wrangler deploy
+      - name: Every sitemap page answers
+        run: |
+          sleep 10
+          fail=0
+          for p in $(grep -o '<loc>[^<]*' sitemap.xml | sed 's|<loc>https://nwd-consulting.com||'); do
+            code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://nwd-site.nwd-site.workers.dev${p:-/}")
+            case "$code" in 200|301) ;; *) echo "::error::$code $p"; fail=1 ;; esac
+          done
+          exit $fail
