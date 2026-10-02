@@ -1,0 +1,34 @@
+# One Worker serves the whole site: the static pages in this repo as assets, the
+# blog at /blog/, and the blog editor at /admin behind Google sign-in.
+# See worker/index.js for the routes.
+
+name = "nwd-site"
+main = "worker/index.js"
+compatibility_date = "2025-09-08"
+# The NWD Cloudflare account (Sarah's), which also holds the nwd-consulting.com zone.
+account_id = "301d0656603a147d1e21498f19ef7e6c"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nwd-blog"
+database_id = "79a3b425-0572-4cbb-8eaa-c1a15ba33afa"
+migrations_dir = "migrations"
+
+[vars]
+# Who may sign in to /admin. Comma-separated, lower case.
+ALLOWED_EMAILS = "sarah@nwd-consulting.com,jake@nwd-consulting.com"
+GOOGLE_HD = "nwd-consulting.com"
+# The NWD Google OAuth client, shared with quadratic. Not a secret: it is in every
+# sign-in URL. Its authorized redirect URIs must include <origin>/auth/google/callback
+# for every origin this Worker answers on. GOOGLE_CLIENT_SECRET is a Worker secret.
+GOOGLE_CLIENT_ID = "599657787905-abeomer2st83bam6g9cj5ukv1u47ii28.apps.googleusercontent.com"
+
+[observability]
+enabled = true
