@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NWD Blog Editor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f5f0; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dedad2;
+    --accent: #1f4e79; --accent-ink: #ffffff; --live: #2e7d32; --warn: #a15c00; --danger: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .me { margin-left: auto; color: var(--muted); font-size: 13px; }
+  header a { color: var(--muted); font-size: 13px; }
+  .wrap { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 50px); }
+  aside { border-right: 1px solid var(--line); padding: 16px; background: var(--panel); }
+  aside button { width: 100%; }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 6px; }
+  .post { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; font: inherit; color: inherit; }
+  .post:hover { background: var(--bg); }
+  .post.on { border-color: var(--accent); background: #eef3f8; }
+  .post .t { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .post .s { font-size: 12px; color: var(--muted); }
+  .chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 9px; margin-right: 4px; }
+  .chip.draft { background: #ece9e2; color: var(--muted); }
+  .chip.live { background: #e3f1e4; color: var(--live); }
+  .chip.changed { background: #fbefdc; color: var(--warn); }
+  main { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .editor, .preview { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  input[type=text] { width: 100%; font: 600 20px/1.3 Georgia, serif; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+  textarea { width: 100%; min-height: 55vh; margin-top: 12px; font: 14px/1.55 ui-monospace, Menlo, monospace; padding: 10px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  button { font: 600 14px/1 inherit; font-family: inherit; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.publish { background: var(--live); color: #fff; border-color: var(--live); }
+  button.danger { color: var(--danger); }
+  button:disabled { opacity: .45; cursor: default; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.dirty { color: var(--warn); }
+  .preview .head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 12px; }
+  .preview .head span { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .preview .head a { font-size: 13px; }
+  /* A quick in-page preview. "See it on the site" shows it in the real site styling. */
+  .article { font: 18px/1.65 Georgia, "Times New Roman", serif; }
+  .article h1.title { font-weight: 500; font-size: 32px; line-height: 1.15; margin: 0 0 4px; }
+  .article .byline { font: 13px/1.4 -apple-system, sans-serif; color: var(--muted); margin-bottom: 20px; }
+  .article img { max-width: 100%; height: auto; }
+  .article pre { overflow-x: auto; background: #f2f0eb; padding: 12px; border-radius: 6px; font-size: 14px; }
+  .article blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); color: #444; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); }
+    main { grid-template-columns: 1fr; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NWD blog</h1>
+  <a href="/blog/" target="_blank" rel="noopener">Blog on the site ↗</a>
+  <span class="me" id="me"></span>
+  <a href="/auth/logout">Sign out</a>
+</header>
+<div class="wrap">
+  <aside>
+    <button class="primary" id="new">New post</button>
+    <h2>Drafts</h2>
+    <div id="drafts"></div>
+    <h2>On the website</h2>
+    <div id="live"></div>
+  </aside>
+  <main id="main">
+    <div class="empty" style="grid-column:1/-1">Pick a post on the left, or start a new one.</div>
+  </main>
+</div>
+
+<template id="editor-tpl">
+  <section class="editor">
+    <label for="title">Title</label>
+    <input type="text" id="title" autocomplete="off">
+    <textarea id="body" spellcheck="true" placeholder="Type or paste markdown here."></textarea>
+    <div class="bar">
+      <button class="primary" id="save">Save draft</button>
+      <button class="publish" id="publish">Publish</button>
+      <button id="unpublish">Take off website</button>
+      <button class="danger" id="delete">Delete draft</button>
+    </div>
+    <div class="bar"><span class="status" id="status"></span></div>
+  </section>
+  <section class="preview">
+    <div class="head"><span>Preview of saved draft</span><span><a id="viewsite" target="_blank" rel="noopener">See it on the site ↗</a> <a id="viewlive" target="_blank" rel="noopener" hidden>Live version ↗</a></span></div>
+    <article class="article" id="preview"></article>
+  </section>
+</template>
+
+<script>
+let posts = [], current = null;
+const $ = (id) => document.getElementById(id);
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { 'content-type': 'application/json' } });
+  if (res.status === 401) { location.href = '/auth/google'; throw new Error('signed out'); }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+const fmt = (iso) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const render = (md) => DOMPurify.sanitize(marked.parse(md || ''));
+
+function chips(p) {
+  if (!p.published_at) return '<span class="chip draft">Draft</span>';
+  return '<span class="chip live">Live</span>' + (p.unpublished_changes ? '<span class="chip changed">Unpublished edits</span>' : '');
+}
+
+function renderList() {
+  const item = (p) => `<button class="post${current && current.id === p.id ? ' on' : ''}" data-id="${p.id}">
+      <span class="t">${esc(p.title)}</span><span class="s">${chips(p)}${esc(p.author.split('@')[0])} · ${fmt(p.updated_at)}</span></button>`;
+  const drafts = posts.filter((p) => !p.published_at);
+  const live = posts.filter((p) => p.published_at);
+  $('drafts').innerHTML = drafts.map(item).join('') || '<div class="status">No drafts.</div>';
+  $('live').innerHTML = live.map(item).join('') || '<div class="status">Nothing published yet.</div>';
+  document.querySelectorAll('.post').forEach((b) => b.onclick = () => open(b.dataset.id));
+}
+
+function dirty() {
+  return current && ($('title').value !== current.title || $('body').value !== current.body_md);
+}
+
+function renderStatus() {
+  const s = $('status');
+  if (dirty()) { s.textContent = 'Unsaved changes. Save draft to update the preview.'; s.className = 'status dirty'; }
+  else if (current.published_at && current.unpublished_changes) { s.textContent = `Saved ${fmt(current.updated_at)}. The website still shows the older version until you Publish.`; s.className = 'status dirty'; }
+  else if (current.published_at) { s.textContent = `Live on the website since ${fmt(current.published_at)}.`; s.className = 'status'; }
+  else { s.textContent = `Draft saved ${fmt(current.updated_at)}. Only signed-in editors can see it.`; s.className = 'status'; }
+}
+
+function renderEditor() {
+  const p = current;
+  $('publish').textContent = p.published_at ? 'Publish changes' : 'Publish';
+  $('publish').disabled = !!p.published_at && !p.unpublished_changes && !dirty();
+  $('unpublish').hidden = !p.published_at;
+  $('delete').hidden = !!p.published_at;
+  $('preview').innerHTML = `<h1 class="title">${esc(p.title)}</h1>
+    <div class="byline">${esc(p.author)}${p.published_at ? ' · ' + new Date(p.published_at).toLocaleDateString(undefined, { dateStyle: 'long' }) : ' · not published'}</div>
+    ${render(p.body_md)}`;
+  $('viewsite').href = `/blog/${p.slug}/?preview`;
+  $('viewlive').hidden = !p.published_at;
+  $('viewlive').href = `/blog/${p.slug}/`;
+  renderStatus();
+}
+
+function open(id) {
+  if (dirty() && !confirm('You have unsaved changes. Leave them?')) return;
+  current = posts.find((p) => p.id === id);
+  const main = $('main');
+  main.innerHTML = '';
+  main.appendChild($('editor-tpl').content.cloneNode(true));
+  $('title').value = current.title;
+  $('body').value = current.body_md;
+  $('title').oninput = $('body').oninput = () => { renderStatus(); $('publish').disabled = false; };
+  $('save').onclick = () => act(save);
+  $('publish').onclick = () => act(async () => {
+    if (dirty()) await save();
+    const msg = current.published_at ? 'Replace the version on the website with this one?' : 'Put this post on the website?';
+    if (!confirm(msg)) return;
+    return api(`/api/admin/posts/${current.id}/publish`, { method: 'POST' });
+  });
+  $('unpublish').onclick = () => act(async () => {
+    if (!confirm('Take this post off the website? It stays here as a draft.')) return;
+    return api(`/api/admin/posts/${current.id}/unpublish`, { method: 'POST' });
+  });
+  $('delete').onclick = () => act(async () => {
+    if (!confirm(`Delete "${current.title}" permanently?`)) return;
+    await api(`/api/admin/posts/${current.id}`, { method: 'DELETE' });
+    posts = posts.filter((p) => p.id !== current.id);
+    current = null;
+    $('main').innerHTML = '<div class="empty" style="grid-column:1/-1">Draft deleted.</div>';
+    renderList();
+  });
+  renderList();
+  renderEditor();
+}
+
+function save() {
+  return api(`/api/admin/posts/${current.id}`, {
+    method: 'PUT', body: JSON.stringify({ title: $('title').value, body_md: $('body').value }),
+  });
+}
+
+async function act(fn) {
+  const buttons = document.querySelectorAll('.editor button');
+  buttons.forEach((b) => b.disabled = true);
+  try {
+    const updated = await fn();
+    if (updated && updated.id) {
+      posts = [updated, ...posts.filter((p) => p.id !== updated.id)];
+      current = updated;
+      $('title').value = updated.title;
+      $('body').value = updated.body_md;
+    }
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    buttons.forEach((b) => b.disabled = false);
+    if (current) { renderList(); renderEditor(); }
+  }
+}
+
+$('new').onclick = async () => {
+  if (dirty() && !confirm('You have unsaved changes. Leave them?')) return;
+  const p = await api('/api/admin/posts', { method: 'POST', body: JSON.stringify({ title: 'Untitled draft', body_md: '' }) });
+  posts.unshift(p);
+  current = null;
+  open(p.id);
+  $('title').select();
+};
+
+window.addEventListener('beforeunload', (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's' && current) { e.preventDefault(); act(save); }
+});
+
+api('/api/admin/posts').then((d) => {
+  posts = d.posts;
+  $('me').textContent = d.me;
+  renderList();
+});
+</script>
+</body>
+</html>

@@ -64,7 +64,9 @@ DEAD_UI = {
     "jp-carousel-comment-form\"": "Jetpack carousel comment form",
 }
 
-SKIP_DIRS = {".git", ".github", "node_modules"}
+# worker/ is Worker source (its admin.html is served by the Worker, not as a page);
+# .wrangler/ is local build output.
+SKIP_DIRS = {".git", ".github", "node_modules", ".wrangler", "worker"}
 # The mirror captured WordPress.com's own marketing pages under the CDN
 # hostnames. They are not ours and are not served.
 SKIP_PAGE_DIRS = {"s0.wp.com", "s1.wp.com", "s2.wp.com"}
