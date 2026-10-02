@@ -32,3 +32,22 @@ GOOGLE_CLIENT_ID = "599657787905-abeomer2st83bam6g9cj5ukv1u47ii28.apps.googleuse
 
 [observability]
 enabled = true
+
+# The sandbox. A separate Worker with its own database, so previews never touch the
+# live blog. Each PR gets a preview URL on it, pr-<number>-nwd-site-preview.nwd-site.workers.dev,
+# uploaded by .github/workflows/agent.yml and preview.yml. Google sign-in does not work
+# on preview URLs (their redirect URIs are not registered); the public pages do.
+[env.preview]
+name = "nwd-site-preview"
+preview_urls = true
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "nwd-blog-preview"
+database_id = "7be405d5-96bf-417a-ad53-8f035eb76c34"
+migrations_dir = "migrations"
+
+[env.preview.vars]
+ALLOWED_EMAILS = "sarah@nwd-consulting.com,jake@nwd-consulting.com"
+GOOGLE_HD = "nwd-consulting.com"
+GOOGLE_CLIENT_ID = "599657787905-abeomer2st83bam6g9cj5ukv1u47ii28.apps.googleusercontent.com"
