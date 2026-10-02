@@ -64,7 +64,8 @@ jobs:
           import html, re, subprocess, sys, urllib.parse
           from pathlib import Path
 
-          skip = {".git", "s0.wp.com", "s1.wp.com", "s2.wp.com"}
+          # worker/ holds the Worker's own pages (served by routes, not as files).
+          skip = {".git", "s0.wp.com", "s1.wp.com", "s2.wp.com", "worker", "node_modules", ".wrangler"}
           refs = set()
           for page in Path(".").rglob("*.html"):
               if skip & set(page.parts):
