@@ -1,0 +1,153 @@
+# Site feedback → PR → sandbox preview.
+#
+# nwd-feedback (the chatbot Sarah uses) files quadratic tickets labelled `agent:queued`
+# and `repo:nwd-site`. Every ten minutes this claims the oldest one, has Claude Code
+# make the change on a branch, opens a PR to ai-main with Jake as reviewer, uploads a
+# preview to the nwd-site-preview Worker, and attaches the PR and preview to the ticket.
+#
+# Secrets: QUADRATIC_TOKEN, CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`, Jake's plan),
+# CLOUDFLARE_API_TOKEN (Workers Scripts: Edit and D1: Edit on the NWD account).
+#
+# To reuse in another site repo: copy this file and .github/agent/, then change the env
+# block below.
+
+name: Agent
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: agent
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  QUADRATIC_URL: https://quadratic.jmirra1515.workers.dev
+  QUADRATIC_TOKEN: ${{ secrets.QUADRATIC_TOKEN }}
+  REPO_LABEL: repo:nwd-site
+  BASE: ai-main
+  REVIEWER: mazerakham
+  PREVIEW_ENV: preview
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Claim a queued ticket
+        id: pick
+        run: |
+          id=$(node .github/agent/quadratic.mjs pick "$REPO_LABEL")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          if [ -z "$id" ]; then echo "Nothing queued."; exit 0; fi
+          node .github/agent/quadratic.mjs ticket "$id" "$RUNNER_TEMP/ticket.md"
+          echo "title=$(node .github/agent/quadratic.mjs title "$id")" >> "$GITHUB_OUTPUT"
+          echo "branch=agent/$(echo "$id" | tr 'A-Z' 'a-z')" >> "$GITHUB_OUTPUT"
+          node .github/agent/quadratic.mjs comment "$id" "Picked up by the agent workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Make the change
+        if: steps.pick.outputs.id != ''
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are working in the nwd-site repository: the static NWD Consulting website,
+            served by a Cloudflare Worker (worker/index.js; README.md explains the layout).
+
+            The ticket is in ${{ runner.temp }}/ticket.md. Read it. Make the change it asks
+            for, and nothing else. Keep the site's existing look; edit the HTML in place.
+            index.html and 404.html are copies of the homepage, so a homepage change goes in
+            both. Student- or visitor-facing copy: no em-dashes.
+
+            Then run `python3 lint.py` and fix anything you broke. Do not commit or push;
+            the workflow does that. Finish by writing ${{ runner.temp }}/summary.md: two or
+            three sentences on what you changed and which files, for the PR description.
+            If the ticket cannot be done without a human decision, change nothing and write
+            that decision to summary.md instead, starting with the line "NEEDS DECISION".
+          claude_args: >-
+            --max-turns 60
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(python3 lint.py),Bash(git diff:*),Bash(git status:*),Bash(ls:*),Bash(grep:*)"
+
+      - name: Open the PR
+        id: pr
+        if: steps.pick.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ID: ${{ steps.pick.outputs.id }}
+          TITLE: ${{ steps.pick.outputs.title }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          summary=$(cat "$RUNNER_TEMP/summary.md" 2>/dev/null || echo "No summary written.")
+          if git diff --quiet || head -1 "$RUNNER_TEMP/summary.md" 2>/dev/null | grep -q "NEEDS DECISION"; then
+            node .github/agent/quadratic.mjs comment "$ID" "The agent made no change. $summary"
+            node .github/agent/quadratic.mjs label "$ID" agent:working agent:failed
+            exit 0
+          fi
+          git checkout -b "$BRANCH"
+          git add -A
+          git -c user.name="Claude (agent)" -c user.email="noreply@anthropic.com" commit -q -F - <<MSG
+          $ID: $TITLE
+
+          $summary
+
+          Requested through nwd-feedback; ticket $QUADRATIC_URL/issue/$ID
+
+          Co-Authored-By: Claude <noreply@anthropic.com>
+          MSG
+          git push -q -f origin "$BRANCH"
+          url=$(gh pr create --base "$BASE" --head "$BRANCH" --reviewer "$REVIEWER" \
+            --title "$ID: $TITLE" \
+            --body "$(printf '%s\n\n**Ticket:** %s/issue/%s\n**Preview:** posted below once uploaded.\n\nMade by the agent workflow from a request filed through nwd-feedback. Commit authored by Claude (agent).' "$summary" "$QUADRATIC_URL" "$ID")")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the sandbox preview
+        id: preview
+        if: steps.pr.outputs.number != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npm ci --silent
+          npx wrangler d1 migrations apply nwd-blog-preview --env "$PREVIEW_ENV" --remote
+          out=$(npx wrangler versions upload --env "$PREVIEW_ENV" --preview-alias "pr-${{ steps.pr.outputs.number }}" 2>&1)
+          echo "$out"
+          url=$(echo "$out" | grep -o 'Version Preview Alias URL: https://[^ ]*' | sed 's/.*URL: //')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Report back
+        if: steps.pr.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ID: ${{ steps.pick.outputs.id }}
+          PR: ${{ steps.pr.outputs.url }}
+          PREVIEW: ${{ steps.preview.outputs.url }}
+        run: |
+          node .github/agent/quadratic.mjs attach "$ID" "$PR" "Pull request"
+          if [ -n "$PREVIEW" ]; then
+            node .github/agent/quadratic.mjs attach "$ID" "$PREVIEW" "Sandbox preview"
+            gh pr comment "$PR" --body "Sandbox preview: $PREVIEW"
+          fi
+          node .github/agent/quadratic.mjs label "$ID" agent:working agent:pr-open
+          node .github/agent/quadratic.mjs state "$ID" "In Review"
+          node .github/agent/quadratic.mjs comment "$ID" "PR $PR is open for Jake's review. Preview: ${PREVIEW:-upload failed, see the run log}."
+
+      - name: Mark failure
+        if: failure() && steps.pick.outputs.id != ''
+        run: |
+          node .github/agent/quadratic.mjs label "${{ steps.pick.outputs.id }}" agent:working agent:failed || true
+          node .github/agent/quadratic.mjs comment "${{ steps.pick.outputs.id }}" "The agent workflow failed: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true

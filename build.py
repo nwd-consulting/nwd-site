@@ -370,6 +370,13 @@ def clean(html: str, prefix: str, stats: dict) -> str:
     html, c = strip_block(html, r'<div[^>]*class="[^"]*comment-respond[^"]*"', "div")
     bump("comment_block", c)
 
+    # The homepage's "What folks are saying" testimonials band, removed at
+    # Jake's request 2026-10-02. Strip the whole band, not just its cards.
+    html, c = strip_block(
+        html, r'<div[^>]*has-secondary-background-color[^>]*>'
+              r'(?=\s*<div[^>]*>\s*<p[^>]*>\s*What folks are saying)', "div")
+    bump("testimonials", c)
+
     # 5. intake form -> Google Form, replaced in place
     html, c = replace_intake(html)
     bump("intake", c)
