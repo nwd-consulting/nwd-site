@@ -372,6 +372,11 @@ export default {
         const r = await blogPost(request, url, env, m[1]);
         if (r) return r;
       }
+      // WordPress archive and feed URLs were never exported, but the exported pages still link
+      // to them (post categories and tags, author pages, RSS links). Send them to the post list.
+      if (/^\/(category|tag|author)\//.test(p) || /(^|\/)feed\/?$/.test(p)) {
+        return Response.redirect(new URL('/blog/', url).toString(), 301);
+      }
       // The Services overview page is retired (2026-10-02): each service has its own
       // page, linked from its box in the homepage's Services section.
       if (p === '/services' || p === '/services/' || p === '/services/index.html') {
