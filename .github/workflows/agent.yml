@@ -105,14 +105,14 @@ jobs:
 
           $summary
 
-          Requested through nwd-feedback; ticket $QUADRATIC_URL/issue/$ID
+          Requested through nwd-feedback; ticket $QUADRATIC_URL/$ID
 
           Co-Authored-By: Claude <noreply@anthropic.com>
           MSG
           git push -q -f origin "$BRANCH"
           url=$(gh pr create --base "$BASE" --head "$BRANCH" --reviewer "$REVIEWER" \
             --title "$ID: $TITLE" \
-            --body "$(printf '%s\n\n**Ticket:** %s/issue/%s\n**Preview:** posted below once uploaded.\n\nMade by the agent workflow from a request filed through nwd-feedback. Commit authored by Claude (agent).' "$summary" "$QUADRATIC_URL" "$ID")")
+            --body "$(printf '%s\n\n**Ticket:** %s/%s\n**Preview:** posted below once uploaded.\n\nMade by the agent workflow from a request filed through nwd-feedback. Commit authored by Claude (agent).' "$summary" "$QUADRATIC_URL" "$ID")")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
 
