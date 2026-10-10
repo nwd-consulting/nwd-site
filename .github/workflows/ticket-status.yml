@@ -1,0 +1,29 @@
+# Moves a site-feedback ticket on once its PR merges into ai-main: agent:pr-open
+# ("Preview ready" in nwd-feedback) becomes agent:merged ("Approved, going live").
+# deploy.yml takes it the rest of the way to agent:live and Done.
+
+name: Ticket status
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ai-main]
+
+jobs:
+  merged:
+    if: github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    env:
+      QUADRATIC_URL: https://quadratic.jmirra1515.workers.dev
+      QUADRATIC_TOKEN: ${{ secrets.QUADRATIC_TOKEN }}
+      TITLE: ${{ github.event.pull_request.title }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      PR: ${{ github.event.pull_request.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mark tickets merged
+        run: |
+          ids=$(printf '%s %s' "$TITLE" "$BRANCH" | grep -oiE '\b[a-z]+-[0-9]+\b' | tr a-z A-Z | sort -u)
+          [ -n "$ids" ] || exit 0
+          node .github/agent/quadratic.mjs advance repo:nwd-site agent:merged "In Review" \
+            "Approved and merged: $PR. It goes live on https://nwd-consulting.com at the next release." $ids

@@ -8,6 +8,10 @@
 //   node quadratic.mjs comment <ID> <body>
 //   node quadratic.mjs label <ID> <from> <to>     swap one label for another
 //   node quadratic.mjs state <ID> <state name>
+//   node quadratic.mjs advance <repo-label> <to-label> <state> <comment> <ID>...
+//                                                 for each ticket carrying <repo-label>: replace
+//                                                 its agent:* label with <to-label>, set <state>,
+//                                                 and comment; other tickets are skipped
 //
 // Env: QUADRATIC_URL, QUADRATIC_TOKEN.
 
@@ -57,6 +61,21 @@ if (cmd === 'pick') {
   await q(`/api/issues/${args[0]}/comments`, { method: 'POST', body: JSON.stringify({ body: args[1] }) });
 } else if (cmd === 'state') {
   await q(`/api/issues/${args[0]}`, { method: 'PATCH', body: JSON.stringify({ state: args[1] }) });
+} else if (cmd === 'advance') {
+  // After the PR merges (to-label agent:merged) and after the deploy (agent:live). Without
+  // this a ticket stayed on agent:pr-open, shown to Sarah as "Preview ready", after its
+  // change was merged and live (PROD-139, PROD-28).
+  const [repo, to, state, body, ...ids] = args;
+  for (const id of new Set(ids)) {
+    let issue;
+    try { issue = await q(`/api/issues/${id}`); } catch { continue; } // an ID from another tracker
+    const labels = names(issue);
+    if (!labels.includes(repo) || labels.includes(to)) continue;
+    const next = labels.filter((n) => !n.startsWith('agent:')).concat([to]);
+    await q(`/api/issues/${id}`, { method: 'PATCH', body: JSON.stringify({ labels: next, state }) });
+    await q(`/api/issues/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+    console.log(`${id} -> ${to}, ${state}`);
+  }
 } else if (cmd === 'label') {
   await swap(args[0], args[1], args[2]);
 } else {
