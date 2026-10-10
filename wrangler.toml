@@ -1,16 +1,15 @@
-# One Worker serves the whole site: the static pages in this repo as assets, the
-# blog at /blog/, and the blog editor at /admin behind Google sign-in.
-# See worker/index.js for the routes.
+# One Worker serves the whole site: public/ as static assets, the blog at /blog/,
+# and the blog editor at /admin behind Google sign-in. Routes: src/index.js.
 
 name = "nwd-site"
-main = "worker/index.js"
+main = "src/index.js"
 compatibility_date = "2025-09-08"
-# The NWD Cloudflare account (Sarah's), which also holds the nwd-consulting.com zone.
+# The NWD Cloudflare account, which also holds the nwd-consulting.com zone.
 account_id = "301d0656603a147d1e21498f19ef7e6c"
 
 # nwd-consulting.com and www are Worker Custom Domains: Cloudflare manages their DNS
-# records and certificates. Cut over from WordPress.com on 2026-10-02 with Sarah's
-# go-ahead. MX/TXT (Google Workspace mail) are separate records and untouched.
+# records and certificates (live since 2026-10-02). MX/TXT records for Google
+# Workspace mail are managed separately in the zone.
 # Keep the workers.dev address and preview URLs alongside the custom domains: the agent
 # workflow, the OAuth redirect URIs and the chatbot registry all name it.
 workers_dev = true
@@ -21,7 +20,7 @@ routes = [
 ]
 
 [assets]
-directory = "."
+directory = "public"
 binding = "ASSETS"
 run_worker_first = true
 html_handling = "auto-trailing-slash"
