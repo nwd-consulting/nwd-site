@@ -382,6 +382,11 @@ export default {
       if (p === '/services' || p === '/services/' || p === '/services/index.html') {
         return Response.redirect(new URL('/#services', url).toString(), 301);
       }
+      // Travis Wichert and Zak Hickman left the team (PROD-145, 2026-10-10); Travis's
+      // profile page is gone, so old links to it land on the team page.
+      if (/^\/travis-wichert(\/|\/index\.html)?$/.test(p)) {
+        return Response.redirect(new URL('/about/', url).toString(), 301);
+      }
       if (p === '/' || p === '/index.html') return await homepage(request, env);
       return env.ASSETS.fetch(request);
     } catch (e) {
