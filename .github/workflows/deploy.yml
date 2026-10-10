@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,3 +42,16 @@ jobs:
             case "$code" in 200|301) ;; *) echo "::error::$code $p"; fail=1 ;; esac
           done
           exit $fail
+      - name: Mark released tickets live
+        if: github.event_name == 'push'
+        env:
+          QUADRATIC_URL: https://quadratic.jmirra1515.workers.dev
+          QUADRATIC_TOKEN: ${{ secrets.QUADRATIC_TOKEN }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # Every ticket ID named in a commit this push released. PR titles and agent
+          # commits carry them (PROD-139: ..., JPA-333: ...).
+          ids=$(git log --format='%s%n%b' "$BEFORE..$GITHUB_SHA" | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u)
+          [ -n "$ids" ] || exit 0
+          node .github/agent/quadratic.mjs advance repo:nwd-site agent:live Done \
+            "Live on https://nwd-consulting.com (deploy $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)." $ids
