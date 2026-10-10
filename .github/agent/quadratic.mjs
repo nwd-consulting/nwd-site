@@ -63,7 +63,7 @@ if (cmd === 'pick') {
   await q(`/api/issues/${args[0]}`, { method: 'PATCH', body: JSON.stringify({ state: args[1] }) });
 } else if (cmd === 'advance') {
   // After the PR merges (to-label agent:merged) and after the deploy (agent:live). Without
-  // this a ticket stayed on agent:pr-open, shown to Sarah as "Preview ready", after its
+  // this a ticket stayed on agent:pr-open, shown to the requester as "Preview ready", after its
   // change was merged and live (PROD-139, PROD-28).
   const [repo, to, state, body, ...ids] = args;
   for (const id of new Set(ids)) {

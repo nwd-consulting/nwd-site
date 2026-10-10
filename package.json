@@ -2,6 +2,15 @@
   "name": "nwd-site",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy" },
-  "dependencies": { "marked": "^12.0.2" }
+  "scripts": {
+    "dev": "wrangler d1 migrations apply nwd-blog --local && wrangler dev --local-upstream localhost:8787",
+    "lint": "python3 scripts/lint.py",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
 }

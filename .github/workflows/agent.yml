@@ -1,6 +1,6 @@
 # Site feedback → PR → sandbox preview.
 #
-# nwd-feedback (the chatbot Sarah uses) files quadratic tickets labelled `agent:queued`
+# nwd-feedback (the site-feedback chatbot) files quadratic tickets labelled `agent:queued`
 # and `repo:nwd-site`. Every ten minutes this claims the oldest one, has Claude Code
 # make the change on a branch, opens a PR to ai-main with Jake as reviewer, uploads a
 # preview to the nwd-site-preview Worker, and attaches the PR and preview to the ticket.
@@ -66,22 +66,23 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            You are working in the nwd-site repository: the static NWD Consulting website,
-            served by a Cloudflare Worker (worker/index.js; README.md explains the layout).
+            You are working in the nwd-site repository: the NWD Consulting website. The
+            pages are static HTML under public/, served by a Cloudflare Worker in src/.
+            README.md explains the layout.
 
             The ticket is in ${{ runner.temp }}/ticket.md. Read it. Make the change it asks
             for, and nothing else. Keep the site's existing look; edit the HTML in place.
-            index.html and 404.html are copies of the homepage, so a homepage change goes in
-            both. Student- or visitor-facing copy: no em-dashes.
+            public/index.html and public/404.html are copies of the homepage, so a homepage
+            change goes in both. Student- or visitor-facing copy: no em-dashes.
 
-            Then run `python3 lint.py` and fix anything you broke. Do not commit or push;
+            Then run `python3 scripts/lint.py` and fix anything you broke. Do not commit or push;
             the workflow does that. Finish by writing ${{ runner.temp }}/summary.md: two or
             three sentences on what you changed and which files, for the PR description.
             If the ticket cannot be done without a human decision, change nothing and write
             that decision to summary.md instead, starting with the line "NEEDS DECISION".
           claude_args: >-
             --max-turns 60
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(python3 lint.py),Bash(git diff:*),Bash(git status:*),Bash(ls:*),Bash(grep:*)"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(python3 scripts/lint.py),Bash(git diff:*),Bash(git status:*),Bash(ls:*),Bash(grep:*)"
 
       - name: Open the PR
         id: pr
